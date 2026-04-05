@@ -2,7 +2,7 @@
 name = "bestreads"
 version = "0.1.0"
 description = "Search Goodreads for books and reviews"
-requires-python = ">=3.11"
+requires-python = ">=3.14"
 dependencies = [
     "requests>=2.31",
     "beautifulsoup4>=4.12",

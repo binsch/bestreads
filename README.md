@@ -44,6 +44,6 @@ uv run pytest -v       # verbose output
 
 ## Requirements
 
-- Python 3.11+
+- Python 3.14.2+
 - [uv](https://docs.astral.sh/uv/)
 - Chromium (installed via `uv run playwright install chromium`)
