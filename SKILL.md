@@ -2,7 +2,7 @@
 name: bestreads
 description: Search Goodreads for books and reviews. Use when the user asks to find a book, look up book reviews, search by title/author/genre, or wants recommendations from Goodreads.
 argument-hint: <title, author, or topic>
-allowed-tools: Bash(python *)
+allowed-tools: Bash(uv *)
 ---
 
 Search Goodreads for books matching `$ARGUMENTS`.
@@ -11,7 +11,7 @@ Search Goodreads for books matching `$ARGUMENTS`.
 
 1. Run the search script:
    ```bash
-   python "${CLAUDE_SKILL_DIR}/scripts/search_books.py" "$ARGUMENTS"
+   uv run --project "${CLAUDE_SKILL_DIR}" python "${CLAUDE_SKILL_DIR}/scripts/search_books.py" "$ARGUMENTS"
    ```
    The script prints JSON to stdout.
 
@@ -22,7 +22,7 @@ Search Goodreads for books matching `$ARGUMENTS`.
 
 3. If the user wants reviews or more details on a specific book, run:
    ```bash
-   python "${CLAUDE_SKILL_DIR}/scripts/search_books.py" --book-url "<url>"
+   uv run --project "${CLAUDE_SKILL_DIR}" python "${CLAUDE_SKILL_DIR}/scripts/search_books.py" --book-url "<url>"
    ```
    Then display the description and any review snippets found.
 
