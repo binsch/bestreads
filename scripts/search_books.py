@@ -8,6 +8,8 @@ from urllib.parse import urlencode, urljoin
 
 import requests
 from bs4 import BeautifulSoup
+from playwright.sync_api import TimeoutError as PlaywrightTimeout
+from playwright.sync_api import sync_playwright
 
 BASE_URL = "https://www.goodreads.com"
 HEADERS = {
@@ -21,23 +23,16 @@ HEADERS = {
 TIMEOUT = 15
 
 
-def search_books(query: str, limit: int = 10) -> list:
-    """Search Goodreads for books matching the query."""
-    url = f"{BASE_URL}/search?" + urlencode({"q": query})
-    try:
-        response = requests.get(url, headers=HEADERS, timeout=TIMEOUT)
-        response.raise_for_status()
-    except requests.RequestException as exc:
-        return {"error": str(exc), "results": []}
-
-    soup = BeautifulSoup(response.text, "lxml")
+def _parse_search_html(html: str) -> list:
+    """Parse Goodreads search results page HTML into a list of book dicts."""
+    soup = BeautifulSoup(html, "lxml")
     results = []
 
     table = soup.find("table", class_="tableList")
     if not table:
         return results
 
-    for row in table.find_all("tr", limit=limit):
+    for row in table.find_all("tr"):
         title_tag = row.find("a", class_="bookTitle")
         author_tag = row.find("a", class_="authorName")
         rating_tag = row.find("span", class_="minirating")
@@ -68,15 +63,9 @@ def search_books(query: str, limit: int = 10) -> list:
     return results
 
 
-def get_book_details(url: str) -> dict:
-    """Fetch details and reviews for a specific book page."""
-    try:
-        response = requests.get(url, headers=HEADERS, timeout=TIMEOUT)
-        response.raise_for_status()
-    except requests.RequestException as exc:
-        return {"error": str(exc)}
-
-    soup = BeautifulSoup(response.text, "lxml")
+def _parse_book_html(html: str, url: str = "") -> dict:
+    """Parse a Goodreads book page HTML (after JS render) into a details dict."""
+    soup = BeautifulSoup(html, "lxml")
 
     # Title — try modern data-testid first, fall back to legacy id
     title_tag = soup.find("h1", {"data-testid": "bookTitle"}) or soup.find(
@@ -90,18 +79,19 @@ def get_book_details(url: str) -> dict:
     )
     description = None
     if desc_container:
-        # Prefer the longest <span> child (Goodreads hides full text in a nested span)
         spans = desc_container.find_all("span")
         candidates = [s.get_text(strip=True) for s in spans if s.get_text(strip=True)]
         if candidates:
             description = max(candidates, key=len)
 
-    # Reviews — available in static HTML on some page versions
-    reviews = []
+    # Reviews — modern Goodreads uses <section class="ReviewText">;
+    # fall back to legacy selectors for older page versions
     review_nodes = (
-        soup.find_all("div", class_="reviewText")
+        soup.find_all("section", class_="ReviewText")
         or soup.find_all("div", {"data-testid": "review"})
+        or soup.find_all("div", class_="reviewText")
     )
+    reviews = []
     for node in review_nodes[:5]:
         text = node.get_text(separator=" ", strip=True)
         if text:
@@ -113,6 +103,41 @@ def get_book_details(url: str) -> dict:
         "description": description,
         "reviews": reviews,
     }
+
+
+def search_books(query: str, limit: int = 10) -> list:
+    """Search Goodreads for books matching the query (uses requests; page is static HTML)."""
+    url = f"{BASE_URL}/search?" + urlencode({"q": query})
+    try:
+        response = requests.get(url, headers=HEADERS, timeout=TIMEOUT)
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        return {"error": str(exc), "results": []}
+
+    return _parse_search_html(response.text)[:limit]
+
+
+def get_book_details(url: str) -> dict:
+    """Fetch details and JS-rendered reviews for a specific book page (uses Playwright)."""
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+            page.goto(url, wait_until="domcontentloaded", timeout=30000)
+            # Wait for reviews to render; proceed with whatever loaded if they don't appear
+            try:
+                page.wait_for_selector(
+                    "section.ReviewText, div[data-testid='review'], div.reviewText",
+                    timeout=8000,
+                )
+            except PlaywrightTimeout:
+                pass
+            html = page.content()
+            browser.close()
+    except Exception as exc:
+        return {"error": str(exc)}
+
+    return _parse_book_html(html, url=url)
 
 
 def main():
