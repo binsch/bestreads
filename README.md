@@ -1,6 +1,10 @@
-# bestreads
+# 📚 bestreads
 
-A Claude Code skill that searches Goodreads for books and reviews.
+> Supercharge Claude with real book recommendations and reviews.
+
+[![CI](https://github.com/binsch/bestreads/actions/workflows/ci.yml/badge.svg)](https://github.com/binsch/bestreads/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+[![Python 3.14+](https://img.shields.io/badge/python-3.14%2B-blue.svg)](https://www.python.org/downloads/)
 
 ## Installation
 
