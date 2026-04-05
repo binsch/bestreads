@@ -11,7 +11,7 @@ Search Goodreads for books matching `$ARGUMENTS`.
 
 1. Run the search script:
    ```bash
-   uv run --project "${CLAUDE_SKILL_DIR}" python "${CLAUDE_SKILL_DIR}/scripts/search_books.py" "$ARGUMENTS"
+   uv run --project "${CLAUDE_SKILL_DIR}" python -m scripts.main "$ARGUMENTS"
    ```
    The script prints JSON to stdout.
 
@@ -22,7 +22,7 @@ Search Goodreads for books matching `$ARGUMENTS`.
 
 3. If the user wants reviews or more details on a specific book, run:
    ```bash
-   uv run --project "${CLAUDE_SKILL_DIR}" python "${CLAUDE_SKILL_DIR}/scripts/search_books.py" --book-url "<url>"
+   uv run --project "${CLAUDE_SKILL_DIR}" python -m scripts.main --book-url "<url>"
    ```
    Then display the description and any review snippets found.
 
