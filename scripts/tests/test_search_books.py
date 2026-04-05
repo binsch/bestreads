@@ -105,6 +105,17 @@ class TestGoodreadsParser:
     def test_parse_search_results_empty(self):
         assert GoodreadsParser.parse_search_results(EMPTY_SEARCH_HTML) == []
 
+    def test_parse_search_results_missing_author(self):
+        html = """
+        <html><body><table class="tableList">
+          <tr>
+            <td><a class="bookTitle" href="/book/show/1"><span>Orphan Book</span></a></td>
+          </tr>
+        </table></body></html>
+        """
+        results = GoodreadsParser.parse_search_results(html)
+        assert results[0]["author"] == "Unknown"
+
     def test_parse_search_results_missing_rating(self):
         html = """
         <html><body><table class="tableList">
@@ -140,6 +151,25 @@ class TestGoodreadsParser:
         assert result["description"] is None
         assert result["reviews"] == []
 
+    def test_parse_book_details_caps_reviews_at_five(self):
+        reviews = "\n".join(
+            f'<section class="ReviewText">Review number {i}.</section>'
+            for i in range(6)
+        )
+        html = f"<html><body>{reviews}</body></html>"
+        result = GoodreadsParser.parse_book_details(html)
+        assert len(result["reviews"]) == 5
+
+    def test_parse_book_details_data_testid_review_selector(self):
+        html = """
+        <html><body>
+        <div data-testid="review">A mid-era review.</div>
+        </body></html>
+        """
+        result = GoodreadsParser.parse_book_details(html)
+        assert len(result["reviews"]) == 1
+        assert result["reviews"][0] == "A mid-era review."
+
     def test_parse_book_details_legacy_review_selector(self):
         html = """
         <html><body>
@@ -157,6 +187,13 @@ class TestGoodreadsParser:
 class TestGoodreadsClient:
     def setup_method(self):
         self.client = GoodreadsClient()
+
+    def test_search_uses_custom_timeout(self):
+        client = GoodreadsClient(timeout=5)
+        with patch("search_books.requests.get", return_value=_mock_response(SEARCH_HTML)) as mock_get:
+            client.search("hobbit")
+        _, kwargs = mock_get.call_args
+        assert kwargs["timeout"] == 5
 
     def test_search_returns_results(self):
         with patch("search_books.requests.get", return_value=_mock_response(SEARCH_HTML)):
@@ -180,6 +217,15 @@ class TestGoodreadsClient:
         assert "error" in result
         assert "timeout" in result["error"]
 
+    def test_search_http_error(self):
+        import requests as req
+        mock = _mock_response(SEARCH_HTML, status_code=403)
+        mock.raise_for_status.side_effect = req.HTTPError("403 Forbidden")
+        with patch("search_books.requests.get", return_value=mock):
+            result = self.client.search("hobbit")
+        assert "error" in result
+        assert "403" in result["error"]
+
     def test_get_book_details_returns_parsed_result(self):
         url = "https://www.goodreads.com/book/show/375802"
         with patch("search_books.sync_playwright", return_value=_mock_playwright(BOOK_DETAIL_HTML)):
@@ -187,6 +233,18 @@ class TestGoodreadsClient:
         assert result["title"] == "The Hobbit"
         assert len(result["reviews"]) == 2
         assert result["url"] == url
+
+    def test_get_book_details_review_timeout(self):
+        from playwright.sync_api import TimeoutError as PlaywrightTimeout
+        mock_ctx = _mock_playwright(BOOK_DETAIL_HTML)
+        # Make wait_for_selector raise so the timeout fallback path is exercised
+        mock_ctx.__enter__.return_value.chromium.launch.return_value \
+            .new_context.return_value.new_page.return_value \
+            .wait_for_selector.side_effect = PlaywrightTimeout("timed out")
+        with patch("search_books.sync_playwright", return_value=mock_ctx):
+            result = self.client.get_book_details("https://www.goodreads.com/book/show/375802")
+        assert "error" not in result
+        assert result["title"] == "The Hobbit"
 
     def test_get_book_details_playwright_error(self):
         mock_ctx = MagicMock()
