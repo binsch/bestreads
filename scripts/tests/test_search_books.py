@@ -73,8 +73,11 @@ def _mock_playwright(html: str) -> MagicMock:
     mock_page.content.return_value = html
     mock_page.wait_for_selector.return_value = None
 
+    mock_context = MagicMock()
+    mock_context.new_page.return_value = mock_page
+
     mock_browser = MagicMock()
-    mock_browser.new_page.return_value = mock_page
+    mock_browser.new_context.return_value = mock_context
 
     mock_pw = MagicMock()
     mock_pw.chromium.launch.return_value = mock_browser

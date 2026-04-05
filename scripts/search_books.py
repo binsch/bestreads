@@ -2,9 +2,14 @@
 """Search Goodreads for books and reviews."""
 
 import argparse
+import io
 import json
 import sys
 from urllib.parse import urlencode, urljoin
+
+# Ensure stdout handles Unicode on Windows
+if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
 
 import requests
 from bs4 import BeautifulSoup
@@ -121,8 +126,24 @@ def get_book_details(url: str) -> dict:
     """Fetch details and JS-rendered reviews for a specific book page (uses Playwright)."""
     try:
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            page = browser.new_page()
+            browser = p.chromium.launch(
+                headless=True,
+                args=["--disable-blink-features=AutomationControlled"],
+            )
+            context = browser.new_context(
+                user_agent=(
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/120.0.0.0 Safari/537.36"
+                ),
+                viewport={"width": 1280, "height": 800},
+                locale="en-US",
+            )
+            # Mask navigator.webdriver to avoid bot detection
+            context.add_init_script(
+                "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+            )
+            page = context.new_page()
             page.goto(url, wait_until="domcontentloaded", timeout=30000)
             # Wait for reviews to render; proceed with whatever loaded if they don't appear
             try:
